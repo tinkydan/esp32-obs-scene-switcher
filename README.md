@@ -1,6 +1,10 @@
 # ESP32 OBS Microscope Wi-Fi Remote Control
 Websockets and Wi-Fi switcher for OBS to remote control active scenes using a ESP32 module.
 
+![image](https://user-images.githubusercontent.com/88251816/192656879-0e998e6a-91cc-4ae2-80e0-843b8618a269.png)
+![image](https://user-images.githubusercontent.com/88251816/192656937-89abf234-c03c-44d0-87ec-05e68dd77169.png)
+
+
 PCB project can be found here
 https://oshwlab.com/daniel.whitney/obs_hotkeys
 
