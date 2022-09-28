@@ -30,12 +30,12 @@ Ticker LED_B;
 #define TRACE(x)
 #endif
 
-int ONE_BLINK[10] = {0, 3, 6, 9, 8, 7, 4, 1, 2, 5};
 int TouchPin[10] = {4, 0, 2, 15, 13, 12, 14, 27, 33, 32};
 int LedPin[10] = {25, 23, 22, 21, 19, 18, 5, 17, 16, 26};
-int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
+//int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
+int WAVE[8] = {1, 4, 7, 8, 9, 6, 3, 2};
 unsigned long last_trigger[10];
-int Touch_T[10]; // number of touch triggersuyy
+int Touch_T[10]; // number of touch trigger
 int threshold = 57;
 int touchValue;
 int debounce = 400;
@@ -44,34 +44,29 @@ int Touch_State[10];
 int Hotkey_State[10];
 bool get_Scene = 0;
 int Request_Count = 1;
-char Scene_Name[][32] = {"Scene1", "Scene2", "Scene3", "Scene4", "Scene5", "Scene6", "Scene7"}; //,"Scene1","Pre_Service", "Worship", "Speaker", "Graphic", "SmallDisplayUL", "SmallDisplayUR"}; // OSB scene
+char Scene_Name[][32] = {"Scene1", "Scene2", "Scene3", "Scene4", "Scene5", "Scene6", "Scene7"}; //,
 
 // byte Brightness[65536];
 unsigned int LED_Iter = 0;
 int iterator = 0;
 
 /* Put your SSID & Password */
-const char *ssid = "TheWhitneys";       // Enter SSID here
-const char *password = "icantremember"; // Enter Password here
+// Default Can be set in web Browser
 
-char OBS_IP_Address[20] = "192.168.1.218";  // OSB computer
+char OBS_IP_Address[20] = "192.168.1.218";  // OSB computer Default Can be set in web Browser
 char OBS_port[6] = "4455";                  // OSB port
 char OBS_password[34] = "USZJqsS6ZlZzpg1k"; // OSB password
+char OBS_input[40] = "Mic/Aux"; // OSB Input
 
 WebSocketsClient webSocket;
 
-/* Put IP Address details */
-IPAddress local_ip(192, 168, 1, 107);
-IPAddress gateway(192, 168, 1, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress primaryDNS(8, 8, 8, 8);   // optional
-IPAddress secondaryDNS(8, 8, 4, 4); // optional
 
 WiFiManager wifiManager;
 
-WiFiManagerParameter custom_OBS_IP_Address("server", "OBS_IP_Address", OBS_IP_Address, 40);
+WiFiManagerParameter custom_OBS_IP_Address("server", "OBS_IP_Address", OBS_IP_Address, 20);
 WiFiManagerParameter custom_OBS_port("port", "OBS_port", OBS_port, 6);
 WiFiManagerParameter custom_OBS_password("apikey", "OBS_password", OBS_password, 32);
+WiFiManagerParameter custom_OBS_input("Input", "OBS_Audio_Input", OBS_input, 40);
 
 StaticJsonDocument<2000> doc;
 
@@ -79,27 +74,6 @@ uint8_t InputPin = 2;
 uint8_t LEDPin = 12;
 bool PreviousState = LOW;
 
-// OBS Event IDs
-enum OBSEvent
-{
-    None,
-    GetAuthRequired,
-    Authenticate,
-    GetCurrentScene,
-    SetCurrentScene,
-    Ch
-};
-
-// OBS Server details
-struct OBS
-{
-    bool Authorised = false;               // true when OBS authorises the connection
-    bool Authorising = false;              // true when sending OBS authorisation hash
-    bool Connected = false;                // true when OBS authorises the connection
-    const std::string messageID = "12345"; // ID sent with web socket packet
-    String PreviousScene = "Webcam";       // This is updated automatically on connection
-    OBSEvent Event;
-} obs;
 
 byte *sha256(const char *payload)
 {
@@ -142,18 +116,12 @@ std::string EncodePassword(std::string challenge, std::string salt)
 
     static const std::string auth_response = b64encode.Encode(auth_response_hash, 32);
 
-    TRACE("\npassword:");
-    TRACE(OBS_password);
-    TRACE("\nsalt:");
-    TRACE(salt.c_str());
-    TRACE("\nchallenge:");
-    TRACE(challenge.c_str());
-    TRACE("\nb64_encoded_hash:");
-    TRACE(secret.c_str());
-    TRACE("\nmsg2h:");
-    TRACE(message2.c_str());
-    TRACE("\nb64_encoded_auth:");
-    TRACE(auth_response.c_str());
+    TRACE("\npassword:");TRACE(OBS_password);
+    TRACE("\nsalt:");TRACE(salt.c_str());
+    TRACE("\nchallenge:");TRACE(challenge.c_str());
+    TRACE("\nb64_encoded_hash:");TRACE(secret.c_str());
+    TRACE("\nmsg2h:");TRACE(message2.c_str());
+    TRACE("\nb64_encoded_auth:");TRACE(auth_response.c_str());
 
     return auth_response;
 }
@@ -168,27 +136,42 @@ void saveConfigCallback()
     shouldSaveConfig = true;
 }
 
-void ConnectionReset()
-{
-    obs.Authorised = false;
-    obs.Authorising = false;
-    obs.Connected = false;
-    obs.Event = None;
-}
 
-void Request_Data(char *Request)
+void Request_Data(String Request)
 {
     Request_Count++;
     StaticJsonDocument<200> reqestdoc;
     reqestdoc["op"] = 6;
     reqestdoc["d"]["requestType"] = Request;
     reqestdoc["d"]["requestId"] = String(Request_Count);
-    // if (strlen(Data2Send) > 1)
-    // {
-    //    reqestdoc["d"]["requestData"] = Data2Send;
-    // }
+    String output2;
+    serializeJsonPretty(reqestdoc, output2);
+    webSocket.sendTXT(output2);
+}
+
+void Mute_Input(String Channel,bool stauts){
+    Request_Count++;
+    StaticJsonDocument<200> reqestdoc;
+    reqestdoc["op"] = 6;
+    reqestdoc["d"]["requestType"] = "SetInputMute";
+    reqestdoc["d"]["requestId"] = String(Request_Count);
+    reqestdoc["d"]["requestData"]["inputName"] = Channel;
+    reqestdoc["d"]["requestData"]["inputMuted"] = stauts;
+
     String output2;
 
+    serializeJsonPretty(reqestdoc, output2);
+    webSocket.sendTXT(output2);
+}
+
+void Get_Mute(String Channel){
+    Request_Count++;
+    StaticJsonDocument<200> reqestdoc;
+    reqestdoc["op"] = 6;
+    reqestdoc["d"]["requestType"] = "GetInputMute";
+    reqestdoc["d"]["requestId"] = String(Request_Count);
+    reqestdoc["d"]["requestData"]["inputName"] = Channel;
+    String output2;
     serializeJsonPretty(reqestdoc, output2);
     webSocket.sendTXT(output2);
 }
@@ -232,67 +215,56 @@ void LED_FADE()
 
 void process_button(int button_num, bool set)
 {
-    TRACE("Iter: ");
-    TRACE(iterator);
-    TRACE("\n");
     if (set && (button_num > 2))
     {
         for (int i = 3; i <= iterator + 2; i++)
         {
             Hotkey_State[i] = 0;
-            // digitalWrite(LedPin[i], Hotkey_State[i] == 1);
             ledcWrite(i, 0);
         }
     }
-    if (set && (button_num < iterator + 3))
+    if (set&&(button_num < iterator + 3)&&(button_num!=2))
     {
-        TRACE("Itr: ");
-        TRACE(iterator);
-        TRACE("\n");
-        // digitalWrite(LedPin[button_num], Hotkey_State[button_num] == 0);
         ledcWrite(button_num, 255);
     }
+    
     for (int i = 0; i <= 6; i++)
     {
-
-        TRACE(Scene_Name[i]);
-        TRACE("\n");
+        TRACE(Scene_Name[i]);TRACE("\n");
     }
 
-    TRACE("Setting botton for ");
-    TRACE(button_num);
-    TRACE(" LED ");
-    TRACE(Hotkey_State[button_num] == 1);
+    TRACE("Setting button for ");TRACE(button_num);TRACE(" LED ");TRACE(Hotkey_State[button_num] == 1);
 
     switch (button_num)
     {
 
     case 0:
-        for (int i = 1; i <= 9; i++)
-        {
-            process_button(i, 0);
-        }
-        break;
+        Request_Data("GetSceneList");
 
     case 1: // Transition
         Request_Data("TriggerStudioModeTransition");
-        Request_Data("GetInputList");
+        //Request_Data("GetInputList");
+        //Request_Data("GetSceneList");
         break;
 
     case 2: // MUTE
 
         if (((Hotkey_State[2] == 0) && set) || ((Hotkey_State[2] == 1) && !set))
         {
+            ledcWrite(2, 255);
             if (set)
             {
                 Hotkey_State[2] = 1;
+                Mute_Input(OBS_input,Hotkey_State[2]);
             }
         }
         else if (((Hotkey_State[2] == 1) && set) || ((Hotkey_State[2] == 0) && !set))
         {
+            ledcWrite(2, 0);
             if (set)
             {
                 Hotkey_State[2] = 0;
+                Mute_Input(OBS_input,Hotkey_State[2]);
             }
         }
 
@@ -336,16 +308,12 @@ void process_button(int button_num, bool set)
         }
         break;
     }
-    TRACE(" after ");
-    TRACE(Hotkey_State[button_num] == 1);
-    TRACE("\n");
+    TRACE(" after ");TRACE(Hotkey_State[button_num] == 1);TRACE("\n");
 }
 
 void ReceivedResponse(char *payload)
 {
-    TRACE("Payload ->/\n");
-    TRACE(payload);
-    TRACE("\n");
+    TRACE("Payload ->/\n");TRACE(payload);TRACE("\n");
 }
 
 void ParseOBSResponse(char *payload)
@@ -371,23 +339,26 @@ void ParseOBSResponse(char *payload)
         // DeserializationError error = deserializeJson(doc, roota["d"]);
         // JsonObject root = doc.as<JsonObject>();
 
-        // for (JsonObject::iterator it = root.begin(); it != root.end(); ++it)
-        //{
-        // TRACE(root["d"] );
-        // TRACE("\n");
-        // Parse the response based on the CurrentMessage ID
 
         if (get_Scene)
         {
             get_Scene = 0;
             Request_Data("GetSceneList");
+            Get_Mute(OBS_input);
         }
 
-        // TRACE(1==(root["d"].hasOwnProperty("requestType")));
-        // TRACE(strcmp(root["d"]["requestType"],"GetSceneList"));
+//Retreives the responce from the mute status request may want a unique id to ensure correct processing
+         if (root["d"]["responseData"]){
+            if (strcmp(root["d"]["requestType"], "GetInputMute") == 0){
+                Hotkey_State[2] = root["d"]["responseData"]["inputMuted"];
+                process_button(2, 0);
+            }
+        }
+
         char RqT[][30] = {"responseData", "eventData"};
         for (int k = 0; k <= 1; k++)
         {
+ 
             TRACE(k);
             if (root["d"][RqT[k]]["scenes"])
             {
@@ -403,8 +374,7 @@ void ParseOBSResponse(char *payload)
                     if (i >= 0)
                     {
                         strcpy(Scene_Name[iter], root["d"][RqT[k]]["scenes"][i]["sceneName"]);
-                        TRACE(Scene_Name[iter]);
-                        TRACE("\n");
+                        TRACE(Scene_Name[iter]);TRACE("\n");
                         iter++;
                     }
                 }
@@ -415,39 +385,39 @@ void ParseOBSResponse(char *payload)
                 for (int i = 0; i <= iterator - 1; i++)
                 {
                     Hotkey_State[i + 3] = 0;
-                    // digitalWrite(LedPin[i + 3], Hotkey_State[i + 3] == 1);
                     ledcWrite(i + 3, 0);
 
                     if (strcmp(root["d"]["responseData"]["currentProgramSceneName"], Scene_Name[i]) == 0)
                     {
                         Hotkey_State[i + 3] = 1;
-                        // digitalWrite(LedPin[i + 3], Hotkey_State[i + 3] == 1);
                         ledcWrite(i + 3, 255);
                     }
                 }
-                TRACE("ity: ");
-                TRACE(iterator);
-                TRACE("\n");
             }
         
-        //{"d":{"eventData":{"sceneName":"Worship"},"eventIntent":4,"eventType":"CurrentProgramSceneChanged"},"op":5}
+
         
         }
         if (root["d"]["eventType"])
         {
+           
+            if (strcmp(root["d"]["eventType"], "InputMuteStateChanged") == 0){
+                if (strcmp(root["d"]["eventData"]["inputName"], OBS_input) == 0){
+                    Hotkey_State[2] = root["d"]["eventData"]["inputMuted"];
+                    process_button(2, 0);
+                }
+            }
             if (strcmp(root["d"]["eventType"], "CurrentProgramSceneChanged") == 0)
             {
                 TRACE("\nScene Change \n");
                 for (int i = 0; i <= iterator - 1; i++)
                 {
                     Hotkey_State[i + 3] = 0;
-                    // digitalWrite(LedPin[i + 3], Hotkey_State[i + 3] == 1);
                     ledcWrite(i + 3, 0);
 
                     if (strcmp(root["d"]["eventData"]["sceneName"], Scene_Name[i]) == 0)
                     {
                         Hotkey_State[i + 3] = 1;
-                        // digitalWrite(LedPin[i + 3], Hotkey_State[i + 3] == 1);
                         ledcWrite(i + 3, 255);
                     }
                 }
@@ -513,7 +483,7 @@ void ParseOBSResponse(char *payload)
                 responsedoc["d"]["authentication"] = hashedpassword;
             }
 
-            responsedoc["d"]["eventSubscriptions"] = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 7;
+            responsedoc["d"]["eventSubscriptions"] = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 3 | 1 << 7;
             String output;
 
             serializeJsonPretty(responsedoc, output);
@@ -522,8 +492,7 @@ void ParseOBSResponse(char *payload)
             // webSocket.sendTXT("Hello");
             // webSocket.sendTXT(output);
             webSocket.loop();
-            obs.Authorising = true;
-            obs.Event = Authenticate;
+
             TRACE("\nAuth Response\n");
             TRACE(output.c_str());
             LED_B.detach();
@@ -533,12 +502,6 @@ void ParseOBSResponse(char *payload)
                 ledcAttachPin(LedPin[i], i);
             }
         }
-        else
-        {
-            // Auth not required
-            obs.Authorised = true;
-        }
-
         TRACE("\n");
     }
 }
@@ -554,20 +517,10 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     {
     case WStype_DISCONNECTED:
         TRACE("OBS: Disconnected\n");
-        ConnectionReset();
         LED_B.attach_ms(10, LED_FADE);
         break;
     case WStype_CONNECTED:
         TRACE("OBS: Connected\n");
-        if (!obs.Authorised)
-        {
-            TRACE("Authorization\n")
-            obs.Event = GetAuthRequired;
-            // ParseOBSResponse((char *)payload);
-            /// webSocket.sendTXT("Hello");
-            //   webSocket.sendTXT("{\"request-type\": \"GetAuthRequired\", \"message-id\":\"12345\"}");
-        }
-
     case WStype_PING:
         TRACE("OBS: Pinged\n");
     case WStype_PONG:
@@ -592,7 +545,6 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 void restart_portal_delayed()
 {
     wifiManager.startWebPortal();
-    // WiFi.softAP("AutoConnectAP");
     Serial.println("Config portal running");
     Serial.println(WiFi.softAPIP());
     blinker.detach();
@@ -620,10 +572,6 @@ void setup()
         // attach the channel to the GPIO to be controlled
         ledcAttachPin(LedPin[i], i);
     }
-    // Set up IO pins
-
-    // Connect to WiFi
-
     // read configuration from FS json
     Serial.println("mounting FS...");
 
@@ -662,6 +610,7 @@ void setup()
                     strcpy(OBS_IP_Address, json["OBS_IP_Address"]);
                     strcpy(OBS_port, json["OBS_port"]);
                     strcpy(OBS_password, json["OBS_password"]);
+                    strcpy(OBS_input, json["OBS_Input"]);
                 }
                 else
                 {
@@ -696,24 +645,17 @@ void setup()
     wifiManager.addParameter(&custom_OBS_IP_Address);
     wifiManager.addParameter(&custom_OBS_port);
     wifiManager.addParameter(&custom_OBS_password);
+    wifiManager.addParameter(&custom_OBS_input);    
 
     // reset settings - for testing
     // wifiManager.resetSettings();
 
-    // set minimu quality of signal so it ignores AP's under that quality
-    // defaults to 8%
-    // wifiManager.setMinimumSignalQuality();
-
-    // sets timeout until configuration portal gets turned off
-    // useful to make it all retry or go to sleep
-    // in seconds
-    // wifiManager.setTimeout(120);
 
     // fetches ssid and pass and tries to connect
     // if it does not connect it starts an access point with the specified name
     // here  "AutoConnectAP"
     // and goes into a blocking loop awaiting configuration
-    if (!wifiManager.autoConnect("AutoConnectAP", "password"))
+    if (!wifiManager.autoConnect("OBS_Setup_AP"))
     {
         Serial.println("failed to connect and hit timeout");
         delay(3000);
@@ -730,10 +672,12 @@ void setup()
     strcpy(OBS_IP_Address, custom_OBS_IP_Address.getValue());
     strcpy(OBS_port, custom_OBS_port.getValue());
     strcpy(OBS_password, custom_OBS_password.getValue());
-    Serial.println("The values in the file are: ");
-    Serial.println("\tOBS_IP_Address : " + String(OBS_IP_Address));
-    Serial.println("\tOBS_port : " + String(OBS_port));
-    Serial.println("\tOBS_password : " + String(OBS_password));
+    strcpy(OBS_input, custom_OBS_input.getValue());
+    TRACE("The values in the file are: \n");
+    TRACE("\tOBS_IP_Address : " + String(OBS_IP_Address) + "\n");
+    TRACE("\tOBS_port : " + String(OBS_port) + "\n");
+    TRACE("\tOBS_password : " + String(OBS_password) + "\n");
+    TRACE("\tOBS_Input : " + String(OBS_input) + "\n");
 
     // save the custom parameters to FS
     if (shouldSaveConfig)
@@ -748,6 +692,7 @@ void setup()
         json["OBS_IP_Address"] = OBS_IP_Address;
         json["OBS_port"] = OBS_port;
         json["OBS_password"] = OBS_password;
+        json["OBS_Input"] = OBS_input;
 
         File configFile = SPIFFS.open("/config.json", "w");
         if (!configFile)
@@ -769,24 +714,11 @@ void setup()
     Serial.println("local ip");
     Serial.println(WiFi.localIP());
 
-    //    TRACE("Connecting to Wifi");
-    //    WiFi.mode(WIFI_STA);
-    //
-    //    if (!WiFi.config(local_ip, gateway, subnet, primaryDNS, secondaryDNS))
-    //    {
-    //        TRACE("Wifi Failed to configure");
-    //   }
-
-    //   WiFi.begin(ssid, password);
+  
     wifiManager.setSaveConfigCallback(restart_portal);
     wifiManager.startWebPortal();
-  
-    TRACE("\n");
-    TRACE("Connected to ");
-    TRACE(ssid);
-    TRACE("\nIP address: ");
-    TRACE(WiFi.localIP());
-    TRACE("\n");
+
+    TRACE("\nIP address: " + String(WiFi.localIP()) + "\n");
 
     // server address, port and URL
     webSocket.begin(OBS_IP_Address, atoi(OBS_port), "/");
@@ -798,17 +730,6 @@ void setup()
     webSocket.setReconnectInterval(10000);
 }
 
-void SetScene(String scene)
-{
-    StaticJsonDocument<200> doc;
-    doc["request-type"] = "SetCurrentScene";
-    doc["message-id"] = obs.messageID;
-    doc["scene-name"] = scene;
-    String output;
-    obs.Event = SetCurrentScene;
-    serializeJsonPretty(doc, output);
-    // webSocket.sendTXT(output);
-}
 
 void loop()
 {
@@ -833,7 +754,6 @@ void loop()
         else if (((millis() - last_trigger[i]) > debounce) && (Touch_T[i] > -touch_check))
         {
             // turn LED off
-
             Touch_T[i]--;
         }
 
@@ -858,7 +778,6 @@ void loop()
                 Touch_T[i]--;
                 if (i < 2)
                 {
-                    // digitalWrite(LedPin[i], LOW);
                     ledcWrite(i, 0);
                 }
             }
