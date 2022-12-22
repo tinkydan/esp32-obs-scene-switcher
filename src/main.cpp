@@ -8,11 +8,13 @@
 #include "base64.h"
 #include "mbedtls/md.h"
 #include "Ticker.h"
+#include <ESPmDNS.h>
 
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 
 #ifdef ESP32
 #include <SPIFFS.h>
+#include <FS.h>
 #endif
 
 // needed for library
@@ -30,9 +32,10 @@ Ticker LED_B;
 #define TRACE(x)
 #endif
 
+int RESET_COUNT=0;
 int TouchPin[10] = {4, 0, 2, 15, 13, 12, 14, 27, 33, 32};
 int LedPin[10] = {25, 23, 22, 21, 19, 18, 5, 17, 16, 26};
-//int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
+// int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
 int WAVE[8] = {1, 4, 7, 8, 9, 6, 3, 2};
 unsigned long last_trigger[10];
 int Touch_T[10]; // number of touch trigger
@@ -56,10 +59,9 @@ int iterator = 0;
 char OBS_IP_Address[20] = "192.168.1.218";  // OSB computer Default Can be set in web Browser
 char OBS_port[6] = "4455";                  // OSB port
 char OBS_password[34] = "USZJqsS6ZlZzpg1k"; // OSB password
-char OBS_input[40] = "Mic/Aux"; // OSB Input
+char OBS_input[40] = "Mic/Aux";             // OSB Input
 
 WebSocketsClient webSocket;
-
 
 WiFiManager wifiManager;
 
@@ -74,6 +76,16 @@ uint8_t InputPin = 2;
 uint8_t LEDPin = 12;
 bool PreviousState = LOW;
 
+void factory_reset()
+{
+    TRACE("Factory Reset\n");
+    wifiManager.resetSettings();
+    WiFi.disconnect();
+    //delay(3000);
+    //hardwareReset();
+    delay(2000);
+ESP.restart();
+}
 
 byte *sha256(const char *payload)
 {
@@ -116,12 +128,18 @@ std::string EncodePassword(std::string challenge, std::string salt)
 
     static const std::string auth_response = b64encode.Encode(auth_response_hash, 32);
 
-    TRACE("\npassword:");TRACE(OBS_password);
-    TRACE("\nsalt:");TRACE(salt.c_str());
-    TRACE("\nchallenge:");TRACE(challenge.c_str());
-    TRACE("\nb64_encoded_hash:");TRACE(secret.c_str());
-    TRACE("\nmsg2h:");TRACE(message2.c_str());
-    TRACE("\nb64_encoded_auth:");TRACE(auth_response.c_str());
+    TRACE("\npassword:");
+    TRACE(OBS_password);
+    TRACE("\nsalt:");
+    TRACE(salt.c_str());
+    TRACE("\nchallenge:");
+    TRACE(challenge.c_str());
+    TRACE("\nb64_encoded_hash:");
+    TRACE(secret.c_str());
+    TRACE("\nmsg2h:");
+    TRACE(message2.c_str());
+    TRACE("\nb64_encoded_auth:");
+    TRACE(auth_response.c_str());
 
     return auth_response;
 }
@@ -136,7 +154,6 @@ void saveConfigCallback()
     shouldSaveConfig = true;
 }
 
-
 void Request_Data(String Request)
 {
     Request_Count++;
@@ -149,7 +166,8 @@ void Request_Data(String Request)
     webSocket.sendTXT(output2);
 }
 
-void Mute_Input(String Channel,bool stauts){
+void Mute_Input(String Channel, bool stauts)
+{
     Request_Count++;
     StaticJsonDocument<200> reqestdoc;
     reqestdoc["op"] = 6;
@@ -164,7 +182,8 @@ void Mute_Input(String Channel,bool stauts){
     webSocket.sendTXT(output2);
 }
 
-void Get_Mute(String Channel){
+void Get_Mute(String Channel)
+{
     Request_Count++;
     StaticJsonDocument<200> reqestdoc;
     reqestdoc["op"] = 6;
@@ -208,8 +227,24 @@ void LED_FADE()
         if (LED_Iter > 65535)
         {
             LED_Iter = LED_Iter - 65535;
+            TRACE("Reset Count:");
+            TRACE(RESET_COUNT);
+            TRACE("    State:");
+            TRACE(digitalRead(0));
+            TRACE("\n");
         }
         set_led_brightness(LED_Iter + i * 65535 / 8, WAVE[i]);
+    }
+     if (!digitalRead(0))
+    {
+        RESET_COUNT=RESET_COUNT+1;
+        if (RESET_COUNT>1000){
+            factory_reset();
+        }
+    }
+    else
+    {
+        RESET_COUNT = 0;
     }
 }
 
@@ -223,17 +258,21 @@ void process_button(int button_num, bool set)
             ledcWrite(i, 0);
         }
     }
-    if (set&&(button_num < iterator + 3)&&(button_num!=2))
+    if (set && (button_num < iterator + 3) && (button_num != 2))
     {
         ledcWrite(button_num, 255);
     }
-    
+
     for (int i = 0; i <= 6; i++)
     {
-        TRACE(Scene_Name[i]);TRACE("\n");
+        TRACE(Scene_Name[i]);
+        TRACE("\n");
     }
 
-    TRACE("Setting button for ");TRACE(button_num);TRACE(" LED ");TRACE(Hotkey_State[button_num] == 1);
+    TRACE("Setting button for ");
+    TRACE(button_num);
+    TRACE(" LED ");
+    TRACE(Hotkey_State[button_num] == 1);
 
     switch (button_num)
     {
@@ -243,8 +282,8 @@ void process_button(int button_num, bool set)
 
     case 1: // Transition
         Request_Data("TriggerStudioModeTransition");
-        //Request_Data("GetInputList");
-        //Request_Data("GetSceneList");
+        // Request_Data("GetInputList");
+        // Request_Data("GetSceneList");
         break;
 
     case 2: // MUTE
@@ -255,7 +294,7 @@ void process_button(int button_num, bool set)
             if (set)
             {
                 Hotkey_State[2] = 1;
-                Mute_Input(OBS_input,Hotkey_State[2]);
+                Mute_Input(OBS_input, Hotkey_State[2]);
             }
         }
         else if (((Hotkey_State[2] == 1) && set) || ((Hotkey_State[2] == 0) && !set))
@@ -264,7 +303,7 @@ void process_button(int button_num, bool set)
             if (set)
             {
                 Hotkey_State[2] = 0;
-                Mute_Input(OBS_input,Hotkey_State[2]);
+                Mute_Input(OBS_input, Hotkey_State[2]);
             }
         }
 
@@ -308,12 +347,16 @@ void process_button(int button_num, bool set)
         }
         break;
     }
-    TRACE(" after ");TRACE(Hotkey_State[button_num] == 1);TRACE("\n");
+    TRACE(" after ");
+    TRACE(Hotkey_State[button_num] == 1);
+    TRACE("\n");
 }
 
 void ReceivedResponse(char *payload)
 {
-    TRACE("Payload ->/\n");TRACE(payload);TRACE("\n");
+    TRACE("Payload ->/\n");
+    TRACE(payload);
+    TRACE("\n");
 }
 
 void ParseOBSResponse(char *payload)
@@ -339,7 +382,6 @@ void ParseOBSResponse(char *payload)
         // DeserializationError error = deserializeJson(doc, roota["d"]);
         // JsonObject root = doc.as<JsonObject>();
 
-
         if (get_Scene)
         {
             get_Scene = 0;
@@ -347,9 +389,11 @@ void ParseOBSResponse(char *payload)
             Get_Mute(OBS_input);
         }
 
-//Retreives the responce from the mute status request may want a unique id to ensure correct processing
-         if (root["d"]["responseData"]){
-            if (strcmp(root["d"]["requestType"], "GetInputMute") == 0){
+        // Retreives the responce from the mute status request may want a unique id to ensure correct processing
+        if (root["d"]["responseData"])
+        {
+            if (strcmp(root["d"]["requestType"], "GetInputMute") == 0)
+            {
                 Hotkey_State[2] = root["d"]["responseData"]["inputMuted"];
                 process_button(2, 0);
             }
@@ -358,7 +402,7 @@ void ParseOBSResponse(char *payload)
         char RqT[][30] = {"responseData", "eventData"};
         for (int k = 0; k <= 1; k++)
         {
- 
+
             TRACE(k);
             if (root["d"][RqT[k]]["scenes"])
             {
@@ -374,7 +418,8 @@ void ParseOBSResponse(char *payload)
                     if (i >= 0)
                     {
                         strcpy(Scene_Name[iter], root["d"][RqT[k]]["scenes"][i]["sceneName"]);
-                        TRACE(Scene_Name[iter]);TRACE("\n");
+                        TRACE(Scene_Name[iter]);
+                        TRACE("\n");
                         iter++;
                     }
                 }
@@ -394,15 +439,14 @@ void ParseOBSResponse(char *payload)
                     }
                 }
             }
-        
-
-        
         }
         if (root["d"]["eventType"])
         {
-           
-            if (strcmp(root["d"]["eventType"], "InputMuteStateChanged") == 0){
-                if (strcmp(root["d"]["eventData"]["inputName"], OBS_input) == 0){
+
+            if (strcmp(root["d"]["eventType"], "InputMuteStateChanged") == 0)
+            {
+                if (strcmp(root["d"]["eventData"]["inputName"], OBS_input) == 0)
+                {
                     Hotkey_State[2] = root["d"]["eventData"]["inputMuted"];
                     process_button(2, 0);
                 }
@@ -463,7 +507,7 @@ void ParseOBSResponse(char *payload)
                 Request_Data("GetSceneList");
             }
         }
-        
+
         if ((root["op"] == 0))
         {
             std::string challenge = root["d"]["authentication"]["challenge"];
@@ -497,7 +541,7 @@ void ParseOBSResponse(char *payload)
             TRACE(output.c_str());
             LED_B.detach();
 
-                for (int i = 0; i <= 9; i++)
+            for (int i = 0; i <= 9; i++)
             {
                 ledcAttachPin(LedPin[i], i);
             }
@@ -575,7 +619,7 @@ void setup()
     // read configuration from FS json
     Serial.println("mounting FS...");
 
-    if (SPIFFS.begin())
+    if (!SPIFFS.begin(true))
     {
         Serial.println("mounted file system");
         if (SPIFFS.exists("/config.json"))
@@ -645,11 +689,10 @@ void setup()
     wifiManager.addParameter(&custom_OBS_IP_Address);
     wifiManager.addParameter(&custom_OBS_port);
     wifiManager.addParameter(&custom_OBS_password);
-    wifiManager.addParameter(&custom_OBS_input);    
+    wifiManager.addParameter(&custom_OBS_input);
 
     // reset settings - for testing
     // wifiManager.resetSettings();
-
 
     // fetches ssid and pass and tries to connect
     // if it does not connect it starts an access point with the specified name
@@ -714,7 +757,6 @@ void setup()
     Serial.println("local ip");
     Serial.println(WiFi.localIP());
 
-  
     wifiManager.setSaveConfigCallback(restart_portal);
     wifiManager.startWebPortal();
 
@@ -728,11 +770,32 @@ void setup()
 
     // try ever 5000 again if connection has failed
     webSocket.setReconnectInterval(10000);
-}
 
+    if (!MDNS.begin("OBS_BOARD"))
+    { // http://esp32.local
+        Serial.println("Error setting up MDNS responder!");
+        while (1)
+        {
+            delay(1000);
+        }
+    }
+}
 
 void loop()
 {
+
+        if (!digitalRead(0))
+    {
+        RESET_COUNT=RESET_COUNT+1;
+        if (RESET_COUNT>10000){
+            factory_reset();
+        }
+
+    }
+    else
+    {
+        RESET_COUNT = 0;
+    }
     webSocket.loop();
     // if (!is_active) {
     wifiManager.process();
@@ -742,7 +805,7 @@ void loop()
     for (int i = 0; i <= 9; i++)
     {
         touchValue = touchRead(TouchPin[i]);
-    
+
         // check if the touchValue is below the threshold
         // if it is, set ledPin to HIGH
         if ((Touch_T[i] < touch_check) && (touchValue < threshold) && ((millis() - last_trigger[i]) > debounce))
@@ -783,4 +846,7 @@ void loop()
             }
         }
     }
+
+
+
 }
