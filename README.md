@@ -1,7 +1,12 @@
 # ESP32 OBS Scene Switcher Websockets
-Setup Tutorial 
-https://docs.google.com/document/d/e/2PACX-1vRzTunqVg-OS8azdRhaPNApveWt6sQ56hrM6_4lAMznl98BQg2CYS9acQC3b7yXp0VFHxEceQMWrN4X/pub
+## Setup Instructions
+[SetupGoogleDoc](https://docs.google.com/document/d/e/2PACX-1vRzTunqVg-OS8azdRhaPNApveWt6sQ56hrM6_4lAMznl98BQg2CYS9acQC3b7yXp0VFHxEceQMWrN4X/pub)
 
+### For additional Help add issues here 
+https://github.com/tinkydan/esp32-obs-scene-switcher/issues
+ <br> <br> <br>
+
+## Summary
 Websockets and Wi-Fi switcher for OBS to remote control active scenes using a ESP32 module.
 
 ![image](https://user-images.githubusercontent.com/88251816/192656879-0e998e6a-91cc-4ae2-80e0-843b8618a269.png)
