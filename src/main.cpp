@@ -11,6 +11,9 @@
 #include <ESPmDNS.h>
 
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
+#include <Preferences.h>
+Preferences preferences;
+#include <EEPROM.h>
 
 #ifdef ESP32
 #include <SPIFFS.h>
@@ -37,6 +40,7 @@ int TouchPin[10] = {4, 0, 2, 15, 13, 12, 14, 27, 33, 32};
 int LedPin[10] = {25, 23, 22, 21, 19, 18, 5, 17, 16, 26};
 // int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
 int WAVE[8] = {1, 4, 7, 8, 9, 6, 3, 2};
+int WAVErev[8] = {2, 3, 6, 9, 8, 7, 4, 1};
 unsigned long last_trigger[10];
 int Touch_T[10]; // number of touch trigger
 int threshold = 57;
@@ -56,10 +60,10 @@ int iterator = 0;
 /* Put your SSID & Password */
 // Default Can be set in web Browser
 
-char OBS_IP_Address[20] = "192.168.1.218";  // OSB computer Default Can be set in web Browser
-char OBS_port[6] = "4455";                  // OSB port
-char OBS_password[34] = "USZJqsS6ZlZzpg1k"; // OSB password
-char OBS_input[40] = "Mic/Aux";             // OSB Input
+char OBS_IP_Address[20] = "192.168.1.187";  // OSB computer Default Can be set in web Browser
+char OBS_port[6] = "4458";                  // OSB port
+char OBS_password[34] = "axzg28JChH6Ox6c7"; // OSB password
+char OBS_input[40] = "Mic/Aub";             // OSB Input
 
 WebSocketsClient webSocket;
 
@@ -150,8 +154,25 @@ bool shouldSaveConfig = false;
 // callback notifying us of the need to save config
 void saveConfigCallback()
 {
+     // read updated parameters
+    strcpy(OBS_IP_Address, custom_OBS_IP_Address.getValue());
+    strcpy(OBS_port, custom_OBS_port.getValue());
+    strcpy(OBS_password, custom_OBS_password.getValue());
+    strcpy(OBS_input, custom_OBS_input.getValue());
     Serial.println("Should save config");
     shouldSaveConfig = true;
+    Serial.println("Setting EEPROM");
+    EEPROM.put( 0, OBS_IP_Address);//[20]
+    EEPROM.put( 20, OBS_port);     //[6]
+    EEPROM.put( 26, OBS_password);  //[34] 
+    EEPROM.put( 60, OBS_input);    //[40] 
+    TRACE("The values stored: \n");
+    TRACE("\tOBS_IP_Address : " + String(OBS_IP_Address) + "\n");
+    TRACE("\tOBS_port : " + String(OBS_port) + "\n");
+    TRACE("\tOBS_password : " + String(OBS_password) + "\n");
+    TRACE("\tOBS_Input : " + String(OBS_input) + "\n");
+    EEPROM.commit();
+    webSocket.begin(OBS_IP_Address, atoi(OBS_port), "/");
 }
 
 void Request_Data(String Request)
@@ -227,24 +248,8 @@ void LED_FADE()
         if (LED_Iter > 65535)
         {
             LED_Iter = LED_Iter - 65535;
-            TRACE("Reset Count:");
-            TRACE(RESET_COUNT);
-            TRACE("    State:");
-            TRACE(digitalRead(0));
-            TRACE("\n");
         }
         set_led_brightness(LED_Iter + i * 65535 / 8, WAVE[i]);
-    }
-     if (!digitalRead(0))
-    {
-        RESET_COUNT=RESET_COUNT+1;
-        if (RESET_COUNT>1000){
-            factory_reset();
-        }
-    }
-    else
-    {
-        RESET_COUNT = 0;
     }
 }
 
@@ -601,12 +606,14 @@ void restart_portal()
 
 void setup()
 {
-    LED_B.attach_ms(10, LED_FADE);
+    
 #ifdef DEBUG
     Serial.begin(115200);
     while (!Serial)
         continue;
 #endif
+
+
 
     TRACE("Booting OBS Controller:");
 
@@ -617,57 +624,51 @@ void setup()
         ledcAttachPin(LedPin[i], i);
     }
     // read configuration from FS json
-    Serial.println("mounting FS...");
 
-    if (!SPIFFS.begin(true))
+
+    delay(1000);
+    while (!digitalRead(0))
     {
-        Serial.println("mounted file system");
-        if (SPIFFS.exists("/config.json"))
-        {
-            // file exists, reading and loading
-            Serial.println("reading config file");
-            File configFile = SPIFFS.open("/config.json", "r");
-            if (configFile)
-            {
-                Serial.println("opened config file");
-                size_t size = configFile.size();
-                // Allocate a buffer to store contents of the file.
-                std::unique_ptr<char[]> buf(new char[size]);
-
-                configFile.readBytes(buf.get(), size);
-
-#if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
-                DynamicJsonDocument json(1024);
-                auto deserializeError = deserializeJson(json, buf.get());
-                serializeJson(json, Serial);
-                if (!deserializeError)
-                {
-#else
-                DynamicJsonBuffer jsonBuffer;
-                JsonObject &json = jsonBuffer.parseObject(buf.get());
-                json.printTo(Serial);
-                if (json.success())
-                {
-#endif
-
-                    Serial.println("\nparsed json");
-                    strcpy(OBS_IP_Address, json["OBS_IP_Address"]);
-                    strcpy(OBS_port, json["OBS_port"]);
-                    strcpy(OBS_password, json["OBS_password"]);
-                    strcpy(OBS_input, json["OBS_Input"]);
-                }
-                else
-                {
-                    Serial.println("failed to load json config");
-                }
-                configFile.close();
-            }
+        RESET_COUNT=RESET_COUNT+1;
+        if (RESET_COUNT>50){
+          factory_reset();
         }
+        delay(100);
+        for (int i = 0; i <= 9; i++){
+        ledcWrite(i, 0);}
+        delay(100);
+        for (int i = 0; i <= 9; i++){
+        ledcWrite(i, 255);}
+
     }
-    else
-    {
-        Serial.println("failed to mount FS");
-    }
+
+LED_B.attach_ms(10, LED_FADE);
+
+Serial.println("Starting EEPROM");
+  while (!EEPROM.begin(256)) {
+    true;
+  }
+  ////////////////////////////////////////////////////`
+  // Pull the values from eeprom
+  //EEPROM
+  if (1 == 0) {
+    Serial.println("Setting EEPROM");
+    EEPROM.put( 0, OBS_IP_Address);//[20]
+    EEPROM.put( 20, OBS_port);     //[6]
+    EEPROM.put( 26, OBS_password);  //[34] 
+    EEPROM.put( 60, OBS_input);    //[40] 
+    EEPROM.commit();
+  }
+  //| LATT | LONG | TIMZ | ARIS | ASET | UpLm | DnLm
+    Serial.println("Reading EEPROM");
+    EEPROM.get( 0, OBS_IP_Address);//[20]
+    EEPROM.get( 20, OBS_port);     //[6]
+    EEPROM.get( 26, OBS_password);  //[34] 
+    EEPROM.get( 60, OBS_input);    //[40] 
+custom_OBS_IP_Address.setValue( OBS_IP_Address, 20);
+custom_OBS_port.setValue(OBS_port, 6);
+custom_OBS_password.setValue( OBS_password, 32);
+custom_OBS_input.setValue( OBS_input, 40);
     // end read
 
     // The extra parameters to be configured (can be either global or just in the setup)
@@ -681,6 +682,9 @@ void setup()
 
     // set config save notify callback
     wifiManager.setSaveConfigCallback(saveConfigCallback);
+    
+    wifiManager.setSaveParamsCallback(saveConfigCallback);
+
 
     // set static ip
     // wifiManager.setSTAStaticIPConfig(IPAddress(10, 0, 1, 99), IPAddress(10, 0, 1, 1), IPAddress(255, 255, 255, 0));
@@ -693,11 +697,18 @@ void setup()
 
     // reset settings - for testing
     // wifiManager.resetSettings();
-
+     //////   WiFi.hostname("OBSBOARD"); // <---- MDNS network hostname dhcp client
     // fetches ssid and pass and tries to connect
     // if it does not connect it starts an access point with the specified name
     // here  "AutoConnectAP"
     // and goes into a blocking loop awaiting configuration
+
+    ////  delay(200); // do not remove, give time for
+
+    ////    if(MDNS.begin("OBSBOARD")){
+     ///     MDNS.addService("http", "tcp", 80);
+   //   /  }
+////
     if (!wifiManager.autoConnect("OBS_Setup_AP"))
     {
         Serial.println("failed to connect and hit timeout");
@@ -708,51 +719,32 @@ void setup()
     }
 
     // if you get here you have connected to the WiFi
-
+    for (int i = 0; i < 8; i++)
+    {WAVE[i] = WAVErev[i];}
     wifiManager.setConfigPortalBlocking(false);
 
     // read updated parameters
-    strcpy(OBS_IP_Address, custom_OBS_IP_Address.getValue());
-    strcpy(OBS_port, custom_OBS_port.getValue());
-    strcpy(OBS_password, custom_OBS_password.getValue());
-    strcpy(OBS_input, custom_OBS_input.getValue());
+    //strcpy(OBS_IP_Address, custom_OBS_IP_Address.getValue());
+    //strcpy(OBS_port, custom_OBS_port.getValue());
+    //strcpy(OBS_password, custom_OBS_password.getValue());
+    //strcpy(OBS_input, custom_OBS_input.getValue());
     TRACE("The values in the file are: \n");
     TRACE("\tOBS_IP_Address : " + String(OBS_IP_Address) + "\n");
     TRACE("\tOBS_port : " + String(OBS_port) + "\n");
     TRACE("\tOBS_password : " + String(OBS_password) + "\n");
     TRACE("\tOBS_Input : " + String(OBS_input) + "\n");
 
-    // save the custom parameters to FS
-    if (shouldSaveConfig)
-    {
-        Serial.println("saving config");
-#if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
-        DynamicJsonDocument json(1024);
-#else
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject &json = jsonBuffer.createObject();
-#endif
-        json["OBS_IP_Address"] = OBS_IP_Address;
-        json["OBS_port"] = OBS_port;
-        json["OBS_password"] = OBS_password;
-        json["OBS_Input"] = OBS_input;
+  if (shouldSaveConfig) {
+//SAVE to EEPROM
 
-        File configFile = SPIFFS.open("/config.json", "w");
-        if (!configFile)
-        {
-            Serial.println("failed to open config file for writing");
-        }
+    Serial.println("Setting EEPROM");
+    EEPROM.put( 0, OBS_IP_Address);//[20]
+    EEPROM.put( 20, OBS_port);     //[6]
+    EEPROM.put( 26, OBS_password);  //[34] 
+    EEPROM.put( 60, OBS_input);    //[40] 
+    EEPROM.commit();
 
-#if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
-        serializeJson(json, Serial);
-        serializeJson(json, configFile);
-#else
-        json.printTo(Serial);
-        json.printTo(configFile);
-#endif
-        configFile.close();
-        // end save
-    }
+  }
 
     Serial.println("local ip");
     Serial.println(WiFi.localIP());
@@ -773,6 +765,7 @@ void setup()
 
     if (!MDNS.begin("OBS_BOARD"))
     { // http://esp32.local
+        MDNS.addService("http", "tcp", 80);
         Serial.println("Error setting up MDNS responder!");
         while (1)
         {
@@ -783,22 +776,10 @@ void setup()
 
 void loop()
 {
-
-        if (!digitalRead(0))
-    {
-        RESET_COUNT=RESET_COUNT+1;
-        if (RESET_COUNT>10000){
-            factory_reset();
-        }
-
-    }
-    else
-    {
-        RESET_COUNT = 0;
-    }
     webSocket.loop();
     // if (!is_active) {
     wifiManager.process();
+    //MDNS.update();
     // Check for Updates and things
     //}
     // put your main code here, to run repeatedly:
