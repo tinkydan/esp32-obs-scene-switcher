@@ -38,12 +38,11 @@ Ticker LED_B;
 int RESET_COUNT=0;
 int TouchPin[10] = {4, 0, 2, 15, 13, 12, 14, 27, 33, 32};
 int LedPin[10] = {25, 23, 22, 21, 19, 18, 5, 17, 16, 26};
-// int WAVE[8] = {1, 2, 3, 6, 9, 8, 7, 4};
 int WAVE[8] = {1, 4, 7, 8, 9, 6, 3, 2};
 int WAVErev[8] = {2, 3, 6, 9, 8, 7, 4, 1};
 unsigned long last_trigger[10];
 int Touch_T[10]; // number of touch trigger
-int threshold = 57;
+int threshold;
 int touchValue;
 int debounce = 400;
 int touch_check = 10;
@@ -60,10 +59,11 @@ int iterator = 0;
 /* Put your SSID & Password */
 // Default Can be set in web Browser
 
-char OBS_IP_Address[20] = "192.168.1.187";  // OSB computer Default Can be set in web Browser
-char OBS_port[6] = "4458";                  // OSB port
+char OBS_IP_Address[20] = "192.168.1.107";  // OSB computer Default Can be set in web Browser
+char OBS_port[6] = "4455";                  // OSB port
 char OBS_password[34] = "axzg28JChH6Ox6c7"; // OSB password
-char OBS_input[40] = "Mic/Aub";             // OSB Input
+char OBS_input[40] = "Mic/Aux";             // OSB Input
+char threshold_ch[6] = "57";             // Touch Sensitivity
 
 WebSocketsClient webSocket;
 
@@ -73,6 +73,7 @@ WiFiManagerParameter custom_OBS_IP_Address("server", "OBS_IP_Address", OBS_IP_Ad
 WiFiManagerParameter custom_OBS_port("port", "OBS_port", OBS_port, 6);
 WiFiManagerParameter custom_OBS_password("apikey", "OBS_password", OBS_password, 32);
 WiFiManagerParameter custom_OBS_input("Input", "OBS_Audio_Input", OBS_input, 40);
+WiFiManagerParameter custom_touch_sensitivity("Thres", "Touch Sensitivity (0-100) lower is more sensitivie", threshold_ch, 6);
 
 StaticJsonDocument<2000> doc;
 
@@ -159,6 +160,7 @@ void saveConfigCallback()
     strcpy(OBS_port, custom_OBS_port.getValue());
     strcpy(OBS_password, custom_OBS_password.getValue());
     strcpy(OBS_input, custom_OBS_input.getValue());
+    strcpy(threshold_ch,  custom_touch_sensitivity.getValue());
     Serial.println("Should save config");
     shouldSaveConfig = true;
     Serial.println("Setting EEPROM");
@@ -166,13 +168,16 @@ void saveConfigCallback()
     EEPROM.put( 20, OBS_port);     //[6]
     EEPROM.put( 26, OBS_password);  //[34] 
     EEPROM.put( 60, OBS_input);    //[40] 
+    EEPROM.put( 100, threshold_ch);    //[6] 
     TRACE("The values stored: \n");
     TRACE("\tOBS_IP_Address : " + String(OBS_IP_Address) + "\n");
     TRACE("\tOBS_port : " + String(OBS_port) + "\n");
     TRACE("\tOBS_password : " + String(OBS_password) + "\n");
     TRACE("\tOBS_Input : " + String(OBS_input) + "\n");
+    TRACE("\tTouch Sensitivity: " + String(threshold_ch) + "\n");
     EEPROM.commit();
-    webSocket.begin(OBS_IP_Address, atoi(OBS_port), "/");
+    threshold=atoi(threshold_ch);
+  
 }
 
 void Request_Data(String Request)
@@ -657,6 +662,7 @@ Serial.println("Starting EEPROM");
     EEPROM.put( 20, OBS_port);     //[6]
     EEPROM.put( 26, OBS_password);  //[34] 
     EEPROM.put( 60, OBS_input);    //[40] 
+    EEPROM.put( 100, threshold_ch);    //[6] 
     EEPROM.commit();
   }
   //| LATT | LONG | TIMZ | ARIS | ASET | UpLm | DnLm
@@ -665,10 +671,13 @@ Serial.println("Starting EEPROM");
     EEPROM.get( 20, OBS_port);     //[6]
     EEPROM.get( 26, OBS_password);  //[34] 
     EEPROM.get( 60, OBS_input);    //[40] 
-custom_OBS_IP_Address.setValue( OBS_IP_Address, 20);
-custom_OBS_port.setValue(OBS_port, 6);
-custom_OBS_password.setValue( OBS_password, 32);
-custom_OBS_input.setValue( OBS_input, 40);
+    EEPROM.get( 100, threshold_ch);    //[6] 
+    threshold=atoi(threshold_ch);
+    custom_OBS_IP_Address.setValue( OBS_IP_Address, 20);
+    custom_OBS_port.setValue(OBS_port, 6);
+    custom_OBS_password.setValue( OBS_password, 32);
+    custom_OBS_input.setValue( OBS_input, 40);
+    custom_touch_sensitivity.setValue( threshold_ch, 6);
     // end read
 
     // The extra parameters to be configured (can be either global or just in the setup)
@@ -694,7 +703,7 @@ custom_OBS_input.setValue( OBS_input, 40);
     wifiManager.addParameter(&custom_OBS_port);
     wifiManager.addParameter(&custom_OBS_password);
     wifiManager.addParameter(&custom_OBS_input);
-
+    wifiManager.addParameter(&custom_touch_sensitivity);
     // reset settings - for testing
     // wifiManager.resetSettings();
      //////   WiFi.hostname("OBSBOARD"); // <---- MDNS network hostname dhcp client
