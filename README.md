@@ -5,7 +5,7 @@
 ### For additional Help add issues here 
 https://github.com/tinkydan/esp32-obs-scene-switcher/issues
  <br> <br> 
-## Purchase Hardware Here
+### Purchase Here
 https://www.ebay.com/itm/295432239535
 <br>
 ## Summary
