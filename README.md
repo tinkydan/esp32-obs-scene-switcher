@@ -4,8 +4,10 @@
 
 ### For additional Help add issues here 
 https://github.com/tinkydan/esp32-obs-scene-switcher/issues
- <br> <br> <br>
-
+ <br> <br> 
+## Purchase Hardware Here
+https://www.ebay.com/itm/295432239535
+<br>
 ## Summary
 Websockets and Wi-Fi switcher for OBS to remote control active scenes using a ESP32 module.
 
