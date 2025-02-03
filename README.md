@@ -3,8 +3,8 @@
 [SetupGoogleDoc](https://docs.google.com/document/d/e/2PACX-1vRzTunqVg-OS8azdRhaPNApveWt6sQ56hrM6_4lAMznl98BQg2CYS9acQC3b7yXp0VFHxEceQMWrN4X/pub)
 
 ### For additional Help add issues here 
-[GithubIssues](https://github.com/tinkydan/esp32-obs-scene-switcher/issues)
- <br> <br> 
+[Issues](https://github.com/tinkydan/esp32-obs-scene-switcher/issues)
+ <br> 
 ### Purchase Here
 [Ebay Purchase Link](https://www.ebay.com/itm/295432239535)
 <br>
